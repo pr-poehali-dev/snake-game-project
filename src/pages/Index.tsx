@@ -21,6 +21,11 @@ const TreeChopperGame = () => {
   const playerRef = useRef<THREE.Object3D>();
   const treesRef = useRef<Tree[]>([]);
   const animationRef = useRef<number>();
+  const axeRef = useRef<THREE.Group>();
+  const axeAnimationRef = useRef<{ isAnimating: boolean; startTime: number }>({
+    isAnimating: false,
+    startTime: 0
+  });
   
   const [gameStarted, setGameStarted] = useState(false);
   const [woodCount, setWoodCount] = useState(0);
@@ -92,6 +97,11 @@ const TreeChopperGame = () => {
     player.position.copy(camera.position);
     scene.add(player);
 
+    // Create axe in hands
+    const axe = createAxe();
+    camera.add(axe);
+    axeRef.current = axe;
+
     // Store references
     sceneRef.current = scene;
     rendererRef.current = renderer;
@@ -104,6 +114,40 @@ const TreeChopperGame = () => {
     // Start animation loop
     animate();
   }, []);
+
+  // Create axe model
+  const createAxe = () => {
+    const axeGroup = new THREE.Group();
+    
+    // Axe handle
+    const handleGeometry = new THREE.CylinderGeometry(0.05, 0.06, 1.5);
+    const handleMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown
+    const handle = new THREE.Mesh(handleGeometry, handleMaterial);
+    handle.position.set(0, -0.75, 0);
+    
+    // Axe head
+    const headGeometry = new THREE.BoxGeometry(0.4, 0.2, 0.1);
+    const headMaterial = new THREE.MeshLambertMaterial({ color: 0x888888 }); // Gray metal
+    const head = new THREE.Mesh(headGeometry, headMaterial);
+    head.position.set(0, 0.1, 0);
+    
+    // Axe blade
+    const bladeGeometry = new THREE.ConeGeometry(0.15, 0.3, 4);
+    const bladeMaterial = new THREE.MeshLambertMaterial({ color: 0xC0C0C0 }); // Silver
+    const blade = new THREE.Mesh(bladeGeometry, bladeMaterial);
+    blade.rotation.z = Math.PI / 2;
+    blade.position.set(0.25, 0.1, 0);
+    
+    axeGroup.add(handle);
+    axeGroup.add(head);
+    axeGroup.add(blade);
+    
+    // Position axe in front of camera
+    axeGroup.position.set(0.5, -0.5, -1.2);
+    axeGroup.rotation.set(0, 0, -Math.PI / 6);
+    
+    return axeGroup;
+  };
 
   // Generate random trees
   const generateTrees = (scene: THREE.Scene) => {
@@ -173,6 +217,23 @@ const TreeChopperGame = () => {
     playerRef.current.position.add(direction);
     cameraRef.current.position.copy(playerRef.current.position);
 
+    // Handle axe animation
+    if (axeAnimationRef.current.isAnimating && axeRef.current) {
+      const elapsed = Date.now() - axeAnimationRef.current.startTime;
+      const duration = 300; // 300ms animation
+      
+      if (elapsed < duration) {
+        const progress = elapsed / duration;
+        const angle = Math.sin(progress * Math.PI) * Math.PI / 3; // Swing motion
+        axeRef.current.rotation.x = -Math.PI / 6 - angle;
+      } else {
+        // Animation complete
+        axeAnimationRef.current.isAnimating = false;
+        axeRef.current.rotation.x = -Math.PI / 6;
+        setIsChopping(false);
+      }
+    }
+
     // Render
     rendererRef.current.render(sceneRef.current, cameraRef.current);
     animationRef.current = requestAnimationFrame(animate);
@@ -183,6 +244,12 @@ const TreeChopperGame = () => {
     if (!cameraRef.current || isChopping) return;
 
     setIsChopping(true);
+    
+    // Start axe animation
+    axeAnimationRef.current = {
+      isAnimating: true,
+      startTime: Date.now()
+    };
     
     // Raycast to find tree
     const raycaster = new THREE.Raycaster();
@@ -223,7 +290,8 @@ const TreeChopperGame = () => {
       }
     }
     
-    setTimeout(() => setIsChopping(false), 500);
+    // Animation will handle setting isChopping to false
+    // setTimeout(() => setIsChopping(false), 500);
   };
 
   // Event handlers
@@ -246,7 +314,7 @@ const TreeChopperGame = () => {
           break;
         case 'Space':
           event.preventDefault();
-          chopTree();
+          // Space no longer used for chopping
           break;
       }
     };
@@ -285,7 +353,11 @@ const TreeChopperGame = () => {
     const handleClick = () => {
       if (mountRef.current && !mouseRef.current.isLocked) {
         mountRef.current.requestPointerLock();
-      } else {
+      }
+    };
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button === 0 && mouseRef.current.isLocked) { // Left mouse button
         chopTree();
       }
     };
@@ -306,6 +378,7 @@ const TreeChopperGame = () => {
     document.addEventListener('keyup', handleKeyUp);
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('click', handleClick);
+    document.addEventListener('mousedown', handleMouseDown);
     document.addEventListener('pointerlockchange', handlePointerLockChange);
     window.addEventListener('resize', handleResize);
 
@@ -314,6 +387,7 @@ const TreeChopperGame = () => {
       document.removeEventListener('keyup', handleKeyUp);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('click', handleClick);
+      document.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('pointerlockchange', handlePointerLockChange);
       window.removeEventListener('resize', handleResize);
     };
@@ -347,7 +421,7 @@ const TreeChopperGame = () => {
               <p className="text-lg">Добро пожаловать в виртуальный лес!</p>
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p>🎯 Цель: рубите деревья и собирайте древесину</p>
-                <p>🎮 Управление: WASD - движение, Пробел - рубить</p>
+                <p>🎮 Управление: WASD - движение, ЛКМ - рубить</p>
                 <p>🖱️ Мышь: осмотр (после клика в игру)</p>
               </div>
             </div>
