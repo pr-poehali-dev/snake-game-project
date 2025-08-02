@@ -10,7 +10,10 @@ interface Tree {
   size: number;
   health: number;
   maxHealth: number;
-  mesh?: THREE.Mesh;
+  hasLeaves: boolean;
+  mesh?: THREE.Group;
+  isFalling: boolean;
+  fallStartTime?: number;
 }
 
 const TreeChopperGame = () => {
@@ -119,32 +122,31 @@ const TreeChopperGame = () => {
   const createAxe = () => {
     const axeGroup = new THREE.Group();
     
-    // Axe handle
-    const handleGeometry = new THREE.CylinderGeometry(0.05, 0.06, 1.5);
+    // Axe handle (larger and more visible)
+    const handleGeometry = new THREE.CylinderGeometry(0.03, 0.04, 0.8);
     const handleMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown
     const handle = new THREE.Mesh(handleGeometry, handleMaterial);
-    handle.position.set(0, -0.75, 0);
+    handle.position.set(0, -0.4, 0);
     
-    // Axe head
-    const headGeometry = new THREE.BoxGeometry(0.4, 0.2, 0.1);
-    const headMaterial = new THREE.MeshLambertMaterial({ color: 0x888888 }); // Gray metal
+    // Axe head (bigger and more prominent)
+    const headGeometry = new THREE.BoxGeometry(0.25, 0.15, 0.08);
+    const headMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 }); // Dark gray metal
     const head = new THREE.Mesh(headGeometry, headMaterial);
-    head.position.set(0, 0.1, 0);
+    head.position.set(0, 0.05, 0);
     
-    // Axe blade
-    const bladeGeometry = new THREE.ConeGeometry(0.15, 0.3, 4);
-    const bladeMaterial = new THREE.MeshLambertMaterial({ color: 0xC0C0C0 }); // Silver
+    // Axe blade (sharper and more visible)
+    const bladeGeometry = new THREE.BoxGeometry(0.2, 0.25, 0.02);
+    const bladeMaterial = new THREE.MeshLambertMaterial({ color: 0xE0E0E0 }); // Light silver
     const blade = new THREE.Mesh(bladeGeometry, bladeMaterial);
-    blade.rotation.z = Math.PI / 2;
-    blade.position.set(0.25, 0.1, 0);
+    blade.position.set(0.15, 0.05, 0);
     
     axeGroup.add(handle);
     axeGroup.add(head);
     axeGroup.add(blade);
     
-    // Position axe in front of camera
-    axeGroup.position.set(0.5, -0.5, -1.2);
-    axeGroup.rotation.set(0, 0, -Math.PI / 6);
+    // Position axe more visibly in bottom right
+    axeGroup.position.set(0.8, -0.8, -1.5);
+    axeGroup.rotation.set(0.3, -0.3, -0.5);
     
     return axeGroup;
   };
@@ -161,32 +163,59 @@ const TreeChopperGame = () => {
       if (Math.sqrt(x * x + z * z) < 10) continue;
       
       const size = Math.random() * 2 + 1;
-      const health = Math.floor(size * 3);
+      const hasLeaves = Math.random() > 0.3; // 70% chance of having leaves
       
       const tree: Tree = {
         id: `tree_${i}`,
         position: new THREE.Vector3(x, 0, z),
         size,
-        health,
-        maxHealth: health
+        health: 1, // One hit kill
+        maxHealth: 1,
+        hasLeaves,
+        isFalling: false
       };
       
       // Create tree mesh
       const trunkGeometry = new THREE.CylinderGeometry(size * 0.3, size * 0.4, size * 4);
       const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown
       const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-      trunk.position.set(x, size * 2, z);
+      trunk.position.set(0, size * 2, 0);
       trunk.castShadow = true;
-      
-      const leavesGeometry = new THREE.SphereGeometry(size * 1.5);
-      const leavesMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 }); // Forest green
-      const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
-      leaves.position.set(x, size * 4, z);
-      leaves.castShadow = true;
       
       const treeGroup = new THREE.Group();
       treeGroup.add(trunk);
-      treeGroup.add(leaves);
+      
+      // Add leaves only if tree has them
+      if (hasLeaves) {
+        const leavesGeometry = new THREE.SphereGeometry(size * 1.5);
+        const leavesMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 }); // Forest green
+        const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+        leaves.position.set(0, size * 4, 0);
+        leaves.castShadow = true;
+        treeGroup.add(leaves);
+      } else {
+        // Add branches for bare trees
+        for (let j = 0; j < 8; j++) {
+          const branchGeometry = new THREE.CylinderGeometry(0.02, 0.05, size * 0.8);
+          const branchMaterial = new THREE.MeshLambertMaterial({ color: 0x654321 }); // Darker brown
+          const branch = new THREE.Mesh(branchGeometry, branchMaterial);
+          const angle = (j / 8) * Math.PI * 2;
+          const radius = size * 0.5;
+          branch.position.set(
+            Math.cos(angle) * radius,
+            size * 2.5 + Math.random() * size,
+            Math.sin(angle) * radius
+          );
+          branch.rotation.set(
+            Math.random() * 0.5 - 0.25,
+            angle,
+            Math.random() * 0.5 - 0.25
+          );
+          treeGroup.add(branch);
+        }
+      }
+      
+      treeGroup.position.set(x, 0, z);
       treeGroup.userData = { treeId: tree.id };
       
       scene.add(treeGroup);
@@ -224,15 +253,34 @@ const TreeChopperGame = () => {
       
       if (elapsed < duration) {
         const progress = elapsed / duration;
-        const angle = Math.sin(progress * Math.PI) * Math.PI / 3; // Swing motion
-        axeRef.current.rotation.x = -Math.PI / 6 - angle;
+        const angle = Math.sin(progress * Math.PI) * Math.PI / 4; // Swing motion
+        axeRef.current.rotation.z = -0.5 - angle;
+        axeRef.current.rotation.x = 0.3 + angle * 0.5;
       } else {
         // Animation complete
         axeAnimationRef.current.isAnimating = false;
-        axeRef.current.rotation.x = -Math.PI / 6;
+        axeRef.current.rotation.z = -0.5;
+        axeRef.current.rotation.x = 0.3;
         setIsChopping(false);
       }
     }
+
+    // Handle falling trees
+    treesRef.current.forEach(tree => {
+      if (tree.isFalling && tree.mesh && tree.fallStartTime) {
+        const elapsed = Date.now() - tree.fallStartTime;
+        const duration = 2000; // 2 second fall
+        
+        if (elapsed < duration) {
+          const progress = elapsed / duration;
+          const fallAngle = progress * Math.PI / 2; // Fall 90 degrees
+          tree.mesh.rotation.z = fallAngle;
+          
+          // Move tree down as it falls
+          tree.mesh.position.y = -progress * tree.size * 1.5;
+        }
+      }
+    });
 
     // Render
     rendererRef.current.render(sceneRef.current, cameraRef.current);
@@ -246,10 +294,12 @@ const TreeChopperGame = () => {
     setIsChopping(true);
     
     // Start axe animation
-    axeAnimationRef.current = {
-      isAnimating: true,
-      startTime: Date.now()
-    };
+    if (axeRef.current) {
+      axeAnimationRef.current = {
+        isAnimating: true,
+        startTime: Date.now()
+      };
+    }
     
     // Raycast to find tree
     const raycaster = new THREE.Raycaster();
@@ -264,27 +314,22 @@ const TreeChopperGame = () => {
       const treeId = intersect.object.parent?.userData?.treeId;
       if (treeId && intersect.distance < 8) {
         const tree = treesRef.current.find(t => t.id === treeId);
-        if (tree && tree.health > 0) {
-          tree.health -= 1;
+        if (tree && tree.health > 0 && !tree.isFalling) {
+          // Instant tree chop
+          tree.health = 0;
+          tree.isFalling = true;
+          tree.fallStartTime = Date.now();
           
-          // Tree chopped animation
-          if (tree.mesh) {
-            tree.mesh.rotation.z += 0.1;
-            
-            if (tree.health <= 0) {
-              // Tree falls down
-              tree.mesh.rotation.z = Math.PI / 2;
-              setWoodCount(prev => prev + Math.floor(tree.size * 2));
-              setTreesChopped(prev => prev + 1);
-              
-              // Remove tree after delay
-              setTimeout(() => {
-                if (tree.mesh && sceneRef.current) {
-                  sceneRef.current.remove(tree.mesh);
-                }
-              }, 2000);
+          setWoodCount(prev => prev + Math.floor(tree.size * 3));
+          setTreesChopped(prev => prev + 1);
+          
+          // Remove tree after fall animation
+          setTimeout(() => {
+            if (tree.mesh && sceneRef.current) {
+              sceneRef.current.remove(tree.mesh);
             }
-          }
+          }, 3000);
+          
           break;
         }
       }
