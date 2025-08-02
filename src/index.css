@@ -98,4 +98,36 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* 8-bit pixel styling */
+  .pixel-text {
+    image-rendering: pixelated;
+    font-family: "Courier New", monospace;
+    letter-spacing: 2px;
+    text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Retro button styling */
+  .retro-button {
+    border: 2px solid;
+    box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.3);
+    transition: all 0.1s ease;
+  }
+
+  .retro-button:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.3);
+  }
+
+  .retro-button:active {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Pixel grid styling */
+  .pixel-grid {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
 }
